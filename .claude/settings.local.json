@@ -8,7 +8,8 @@
       "Bash(where:*)",
       "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe\":*)",
       "Bash(dir:*)",
-      "Bash(\"/c/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" Playnite.sln -p:Configuration=Release -p:Platform=x86)"
+      "Bash(\"/c/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/MSBuild/Current/Bin/MSBuild.exe\" Playnite.sln -p:Configuration=Release -p:Platform=x86)",
+      "Bash(\"/c/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/MSBuild/Current/Bin/MSBuild.exe\":*)"
     ]
   }
 }

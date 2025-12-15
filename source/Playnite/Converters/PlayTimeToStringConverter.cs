@@ -1,5 +1,6 @@
 ﻿using Playnite.SDK;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,6 +21,12 @@ namespace Playnite.Converters
         private static string LOCPlayedMinutes;
         private static string LOCPlayedHours;
         private static string LOCPlayedDays;
+
+        // Cache conversion results to avoid repeated calculations
+        private static readonly ConcurrentDictionary<(ulong time, bool useDays), string> conversionCache = new ConcurrentDictionary<(ulong, bool), string>();
+
+        // Limit cache size to prevent memory bloat
+        private const int MaxCacheSize = 500;
 
         private static void CacheStrings()
         {
@@ -50,29 +57,61 @@ namespace Playnite.Converters
                 return LOCPlayedNone;
             }
 
+            var useDays = parameter is bool formatToDays && formatToDays;
+            var cacheKey = (seconds, useDays);
+
+            // Check cache first
+            if (conversionCache.TryGetValue(cacheKey, out var cachedResult))
+            {
+                return cachedResult;
+            }
+
+            // Clean up cache if it gets too large
+            if (conversionCache.Count > MaxCacheSize)
+            {
+                var keysToRemove = conversionCache.Keys.Take(MaxCacheSize / 4).ToList();
+                foreach (var key in keysToRemove)
+                {
+                    conversionCache.TryRemove(key, out _);
+                }
+            }
+
+            // Calculate the result
+            string result;
+
             // Can't use TimeSpan from seconds because ulong is too large for it
             if (seconds < 60)
             {
-                return string.Format(LOCPlayedSeconds, seconds);
+                result = string.Format(LOCPlayedSeconds, seconds);
             }
-
-            var minutes = seconds / 60;
-            if (minutes < 60)
+            else
             {
-                return string.Format(LOCPlayedMinutes, minutes);
+                var minutes = seconds / 60;
+                if (minutes < 60)
+                {
+                    result = string.Format(LOCPlayedMinutes, minutes);
+                }
+                else
+                {
+                    var hours = minutes / 60;
+                    if (useDays && hours >= 24)
+                    {
+                        var days = hours / 24;
+                        var remainingHours = hours % 24;
+                        var remainingMinutes = minutes % 60;
+
+                        result = string.Format(LOCPlayedDays, days, remainingHours, remainingMinutes);
+                    }
+                    else
+                    {
+                        result = string.Format(LOCPlayedHours, hours, minutes - (hours * 60));
+                    }
+                }
             }
 
-            var hours = minutes / 60;
-            if (parameter is bool formatToDays && formatToDays && hours >= 24)
-            {
-                var days = hours / 24;
-                var remainingHours = hours % 24;
-                var remainingMinutes = minutes % 60;
-
-                return string.Format(LOCPlayedDays, days, remainingHours, remainingMinutes);
-            }
-
-            return string.Format(LOCPlayedHours, hours, minutes - (hours * 60));
+            // Cache the result
+            conversionCache.TryAdd(cacheKey, result);
+            return result;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)

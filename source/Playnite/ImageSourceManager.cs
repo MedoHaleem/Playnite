@@ -2,6 +2,7 @@
 using Playnite.Database;
 using Playnite.SDK;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing.Imaging;
 using System.IO;
@@ -20,7 +21,15 @@ namespace Playnite
         private static GameDatabase database;
         public static MemoryCache Cache = new MemoryCache(Units.MegaBytesToBytes(100));
         private const string btmpPropsFld = "bitmappros";
-        private static readonly SemaphoreSlim decodeSemaphore = new SemaphoreSlim(4, 4);
+
+        // Increase concurrent operations based on CPU cores for better performance
+        private static readonly SemaphoreSlim decodeSemaphore = new SemaphoreSlim(Environment.ProcessorCount * 2, Environment.ProcessorCount * 2);
+
+        // Cache image dimensions to avoid repeated file access
+        private static readonly ConcurrentDictionary<string, System.Windows.Size> imageDimensionsCache = new ConcurrentDictionary<string, System.Windows.Size>();
+
+        // Limit dimension cache size to prevent memory bloat
+        private const int MaxDimensionCacheSize = 1000;
 
         private static string GetCacheKey(string source, BitmapLoadProperties loadProperties)
         {
@@ -308,6 +317,13 @@ namespace Playnite
             {
                 try
                 {
+                    // Skip decoding oversized images that are much larger than needed
+                    if (ShouldSkipImageDecoding(source, loadProperties))
+                    {
+                        logger.Debug($"Skipping large image decoding for performance: {source}");
+                        return null;
+                    }
+
                     var imageData = BitmapExtensions.BitmapFromFile(source, loadProperties);
                     if (imageData != null)
                     {
@@ -355,6 +371,67 @@ namespace Playnite
                 logger.Error(exc, "Failed to load image from database.");
                 return null;
             }
+        }
+
+        private static System.Windows.Size? GetImageDimensionsFast(string imagePath)
+        {
+            if (string.IsNullOrEmpty(imagePath))
+            {
+                return null;
+            }
+
+            return imageDimensionsCache.GetOrAdd(imagePath, path =>
+            {
+                try
+                {
+                    // Clean up cache if it gets too large
+                    if (imageDimensionsCache.Count > MaxDimensionCacheSize)
+                    {
+                        var keysToRemove = imageDimensionsCache.Keys.Take(MaxDimensionCacheSize / 4).ToList();
+                        foreach (var key in keysToRemove)
+                        {
+                            imageDimensionsCache.TryRemove(key, out _);
+                        }
+                    }
+
+                    // Fast dimension read without full decoding
+                    using (var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        var decoder = BitmapDecoder.Create(fileStream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+                        if (decoder.Frames.Count > 0)
+                        {
+                            var frame = decoder.Frames[0];
+                            return new System.Windows.Size(frame.PixelWidth, frame.PixelHeight);
+                        }
+                    }
+                }
+                catch (Exception e) when (!PlayniteEnvironment.ThrowAllErrors)
+                {
+                    logger.Debug(e, $"Failed to get image dimensions for: {imagePath}");
+                }
+
+                return new System.Windows.Size(0, 0);
+            });
+        }
+
+        private static bool ShouldSkipImageDecoding(string imagePath, BitmapLoadProperties loadProperties)
+        {
+            if (loadProperties?.MaxDecodePixelWidth <= 0)
+            {
+                return false;
+            }
+
+            var dimensions = GetImageDimensionsFast(imagePath);
+            if (dimensions.HasValue && dimensions.Value.Width > 0)
+            {
+                // If image is much larger than needed, skip for now and load thumbnail first
+                if (dimensions.Value.Width > loadProperties.MaxDecodePixelWidth * 2)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void TryAddToCache(string cacheKey, BitmapSource imageData, BitmapLoadProperties loadProperties, bool cached)

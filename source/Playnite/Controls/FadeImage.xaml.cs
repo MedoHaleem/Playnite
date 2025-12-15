@@ -23,7 +23,7 @@ namespace Playnite.Controls
     /// <summary>
     /// Interaction logic for FadeImage.xaml
     /// </summary>
-    public partial class FadeImage : UserControl
+    public partial class FadeImage : UserControl, IDisposable
     {
         private enum CurrentImage
         {
@@ -193,18 +193,81 @@ namespace Playnite.Controls
 
         ~FadeImage()
         {
-            sourceChangeTimer.Dispose();
+            Dispose(false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Cancel any pending image loading
+                loadCancellation?.Cancel();
+                loadCancellation?.Dispose();
+
+                // Stop timers
+                sourceChangeTimer.Stop();
+                sourceChangeTimer.Dispose();
+
+                // Clean up event handlers
+                Image1FadeOut.Completed -= Image1FadeOut_Completed;
+                Image2FadeOut.Completed -= Image2FadeOut_Completed;
+                BorderDarkenFadeOut.Completed -= BorderDarkenOut_Completed;
+
+                // Dispose bitmap sources
+                DisposeBitmapSource(Image1.Source);
+                DisposeBitmapSource(Image2.Source);
+
+                // Clear sources
+                Image1.Source = null;
+                Image2.Source = null;
+
+                // Dispose blur effect
+                if (ImageHolder.Effect is BlurEffect blurEffect)
+                {
+                    ImageHolder.Effect = null;
+                    // BlurEffect doesn't need explicit disposal, but we remove the reference
+                }
+            }
+        }
+
+        private void DisposeBitmapSource(object imageSource)
+        {
+            if (imageSource is BitmapSource bitmapSource)
+            {
+                // Try to freeze if not already frozen to optimize memory
+                if (!bitmapSource.IsFrozen && bitmapSource.CanFreeze)
+                {
+                    try
+                    {
+                        bitmapSource.Freeze();
+                    }
+                    catch
+                    {
+                        // Ignore freeze errors
+                    }
+                }
+            }
         }
 
         private void Image1FadeOut_Completed(object sender, EventArgs e)
         {
+            // Properly dispose the bitmap source
+            DisposeBitmapSource(Image1.Source);
             Image1.Source = null;
             Image1.UpdateLayout();
-            GC.Collect();
+            // Remove manual GC.Collect() - let framework handle garbage collection
         }
 
         private void Image2FadeOut_Completed(object sender, EventArgs e)
         {
+            // Properly dispose the bitmap source
+            DisposeBitmapSource(Image2.Source);
             Image2.Source = null;
             Image2.UpdateLayout();
         }
@@ -296,6 +359,8 @@ namespace Playnite.Controls
 
                 if (cancelToken.IsCancellationRequested || localCancellation != loadCancellation)
                 {
+                    // Dispose the unused image to prevent memory leaks
+                    DisposeBitmapSource(image);
                     return;
                 }
             }

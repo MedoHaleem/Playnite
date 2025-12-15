@@ -418,9 +418,14 @@
     <ListView x:Name="GridGames" SelectionMode="Extended" BorderThickness="0"
               DataContext="{Binding AppSettings.ViewSettings, RelativeSource={RelativeSource AncestorType=UserControl}}"
               ItemsSource="{Binding ItemsSource, RelativeSource={RelativeSource AncestorType=UserControl}}"
-              VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
-              VirtualizingPanel.CacheLengthUnit="Item" VirtualizingPanel.CacheLength="5"
+              VirtualizingPanel.VirtualizationMode="Recycling"
+              VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+              VirtualizingPanel.CacheLengthUnit="Item"
+              VirtualizingPanel.CacheLength="10,5"
               VirtualizingPanel.ScrollUnit="Pixel"
+              VirtualizingPanel.IsContainerVirtualizable="True"
+              ScrollViewer.IsDeferredScrollingEnabled="True"
+              ScrollViewer.PanningMode="VerticalOnly"
               pbeh:ScrollToSelectedBehavior.Enabled="True">
         <ListView.Resources>
             <p:BindingProxy x:Key="SettingsProxy" Data="{Binding}" />

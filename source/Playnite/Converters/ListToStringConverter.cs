@@ -1,6 +1,7 @@
 ﻿using Playnite.SDK;
 using Playnite.SDK.Models;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -64,6 +65,12 @@ namespace Playnite.Converters
 
     public class NiceListToStringConverter : MarkupExtension, IValueConverter
     {
+        // Cache conversion results to avoid repeated string operations
+        private static readonly ConcurrentDictionary<int, string> conversionCache = new ConcurrentDictionary<int, string>();
+
+        // Limit cache size to prevent memory bloat
+        private const int MaxCacheSize = 1000;
+
         public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         {
             if (value == null)
@@ -71,13 +78,49 @@ namespace Playnite.Converters
                 return string.Empty;
             }
 
-            if (value is IEnumerable<dynamic>)
+            if (value is IEnumerable<object> enumerable)
             {
-                return string.Join(", ", (IEnumerable<object>)value);
+                // Create a hash from the list content for caching
+                var hash = GetListHash(enumerable);
+
+                // Check cache first
+                if (conversionCache.TryGetValue(hash, out var cachedResult))
+                {
+                    return cachedResult;
+                }
+
+                // Clean up cache if it gets too large
+                if (conversionCache.Count > MaxCacheSize)
+                {
+                    var keysToRemove = conversionCache.Keys.Take(MaxCacheSize / 4).ToList();
+                    foreach (var key in keysToRemove)
+                    {
+                        conversionCache.TryRemove(key, out _);
+                    }
+                }
+
+                // Calculate and cache the result
+                var result = string.Join(", ", enumerable);
+                conversionCache.TryAdd(hash, result);
+                return result;
             }
             else
             {
                 return value.ToString();
+            }
+        }
+
+        private static int GetListHash(IEnumerable<object> enumerable)
+        {
+            // Compatible hash code calculation for .NET Framework 4.6.2
+            unchecked
+            {
+                int hash = 17;
+                foreach (var item in enumerable)
+                {
+                    hash = hash * 23 + (item?.ToString() ?? string.Empty).GetHashCode();
+                }
+                return hash;
             }
         }
 

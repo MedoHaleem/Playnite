@@ -13,6 +13,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
+using System.Windows;
 
 namespace Playnite
 {
@@ -20,6 +21,7 @@ namespace Playnite
     {
         private static readonly ILogger logger = LogManager.GetLogger();
         private readonly PlayniteSettings settings;
+        private bool disposed = false;
 
         public static BitmapLoadProperties DetailsListIconProperties { get; private set; }
         public static BitmapLoadProperties GridViewCoverProperties { get; private set; }
@@ -215,7 +217,8 @@ namespace Playnite
             Game = game;
             if (!readOnly)
             {
-                Game.PropertyChanged += Game_PropertyChanged;
+                // Use weak event pattern to prevent memory leaks
+                WeakEventManager<Game, PropertyChangedEventArgs>.AddHandler(Game, nameof(Game.PropertyChanged), Game_PropertyChanged);
             }
         }
 
@@ -364,44 +367,96 @@ namespace Playnite
 
         public void Dispose()
         {
-            Game.PropertyChanged -= Game_PropertyChanged;
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposed)
+            {
+                if (disposing)
+                {
+                    // Remove weak event handler
+                    WeakEventManager<Game, PropertyChangedEventArgs>.RemoveHandler(Game, nameof(Game.PropertyChanged), Game_PropertyChanged);
+                }
+                disposed = true;
+            }
+        }
+
+        ~GamesCollectionViewEntry()
+        {
+            Dispose(false);
         }
 
         private void Game_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            // Early exit if disposed to prevent memory leaks
+            if (disposed)
+            {
+                return;
+            }
+
             OnPropertyChanged(e.PropertyName);
         }
 
         public void OnPropertyChanged(string propertyName)
         {
-            if (propertyName == nameof(Game.SortingName) || propertyName == nameof(Game.Name))
+            // Early exit if disposed
+            if (disposed)
             {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Game.Name)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayName)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NameGroup)));
+                return;
             }
 
-            if (propertyName == nameof(Game.Icon))
+            // Batch related property changes to reduce UI update overhead
+            switch (propertyName)
             {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IconObject)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IconObjectCached)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DetailsListIconObjectCached)));
+                case nameof(Game.SortingName):
+                case nameof(Game.Name):
+                    // Batch name-related property changes
+                    OnPropertyChangedBatch(nameof(Game.Name), nameof(DisplayName), nameof(NameGroup));
+                    break;
+
+                case nameof(Game.Icon):
+                    // Batch icon-related property changes
+                    OnPropertyChangedBatch(nameof(IconObject), nameof(IconObjectCached), nameof(DetailsListIconObjectCached));
+                    // Don't forward the original property since we handled it
+                    return;
+
+                case nameof(Game.CoverImage):
+                    // Batch cover image-related property changes
+                    OnPropertyChangedBatch(nameof(CoverImageObject), nameof(CoverImageObjectCached), nameof(GridViewCoverObjectCached));
+                    // Don't forward the original property since we handled it
+                    return;
+
+                case nameof(Game.BackgroundImage):
+                    // Batch background image-related property changes
+                    OnPropertyChangedBatch(nameof(DisplayBackgroundImage), nameof(DisplayBackgroundImageObject));
+                    // Don't forward the original property since we handled it
+                    return;
+
+                default:
+                    // Only forward properties that actually exist on this wrapper
+                    if (typeof(GamesCollectionViewEntry).GetProperty(propertyName) != null)
+                    {
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+                    }
+                    break;
+            }
+        }
+
+        private void OnPropertyChangedBatch(params string[] propertyNames)
+        {
+            if (disposed)
+            {
+                return;
             }
 
-            if (propertyName == nameof(Game.CoverImage))
+            // Batch multiple property changes to reduce overhead
+            foreach (var propName in propertyNames)
             {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CoverImageObject)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CoverImageObjectCached)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(GridViewCoverObjectCached)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propName));
             }
-
-            if (propertyName == nameof(Game.BackgroundImage))
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayBackgroundImage)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayBackgroundImageObject)));
-            }
-
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
         private object GetImageObject(string data, bool cached, BitmapLoadProperties loadProperties = null)

@@ -317,13 +317,6 @@ namespace Playnite
             {
                 try
                 {
-                    // Skip decoding oversized images that are much larger than needed
-                    if (ShouldSkipImageDecoding(source, loadProperties))
-                    {
-                        logger.Debug($"Skipping large image decoding for performance: {source}");
-                        return null;
-                    }
-
                     var imageData = BitmapExtensions.BitmapFromFile(source, loadProperties);
                     if (imageData != null)
                     {

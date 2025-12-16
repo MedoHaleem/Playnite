@@ -38,9 +38,15 @@ namespace Playnite.Common
 
         public static Image GetImageFromFile(string path, BitmapScalingMode scaling = BitmapScalingMode.HighQuality, double height = 16, double width = 16)
         {
+            var source = System.Drawing.Imaging.BitmapExtensions.BitmapFromFile(path);
+            if (source == null)
+            {
+                return null;
+            }
+
             var image = new Image()
             {
-                Source = System.Drawing.Imaging.BitmapExtensions.BitmapFromFile(path),
+                Source = source,
                 Height = height,
                 Width = width
             };

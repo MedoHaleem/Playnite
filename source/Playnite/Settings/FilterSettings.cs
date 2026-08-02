@@ -191,6 +191,17 @@ namespace Playnite
         [JsonIgnore]
         public bool IsSet => !Text.IsNullOrEmpty() || Ids?.Any() == true;
 
+        /// <summary>
+        /// Gets the exact selected IDs for the selected-groups-only projection.
+        /// Returns the existing non-empty <see cref="Ids"/> list by reference only when
+        /// <see cref="Text"/> is empty (pure ID selection, no text search). Returns null
+        /// when no IDs are selected, when a text search is active, or when both are set
+        /// (text-plus-ID), so the projection can fail open to ordinary grouping.
+        /// <see cref="Guid.Empty"/> is preserved as an ordinary selectable ID.
+        /// </summary>
+        [JsonIgnore]
+        public List<Guid> ExactIds => Text.IsNullOrEmpty() ? (Ids?.Any() == true ? Ids : null) : null;
+
         private List<Guid> ids;
         public List<Guid> Ids
         {
@@ -200,6 +211,7 @@ namespace Playnite
                 ids = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsSet));
+                OnPropertyChanged(nameof(ExactIds));
             }
         }
 
@@ -223,6 +235,7 @@ namespace Playnite
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsSet));
                 OnPropertyChanged(nameof(Texts));
+                OnPropertyChanged(nameof(ExactIds));
             }
         }
 
@@ -625,6 +638,32 @@ namespace Playnite
             }
         }
 
+        private bool showSelectedGroupsOnly;
+        /// <summary>
+        /// Gets or sets value indicating whether only projected entries whose
+        /// grouping value is one of the exactly selected IDs for the current grouping
+        /// field should be visible. Deliberately excluded from <see cref="IsActive"/>
+        /// because it does not change which games match the filter, only projected
+        /// entry visibility in grouped views.
+        /// </summary>
+        public bool ShowSelectedGroupsOnly
+        {
+            get
+            {
+                return showSelectedGroupsOnly;
+            }
+
+            set
+            {
+                if (showSelectedGroupsOnly != value)
+                {
+                    showSelectedGroupsOnly = value;
+                    OnPropertyChanged();
+                    OnFilterChanged(nameof(ShowSelectedGroupsOnly));
+                }
+            }
+        }
+
         private bool isInstalled;
         public bool IsInstalled
         {
@@ -1018,6 +1057,12 @@ namespace Playnite
                 filterChanges.Add(nameof(UseAndFilteringStyle));
             }
 
+            if (ShowSelectedGroupsOnly != false)
+            {
+                ShowSelectedGroupsOnly = false;
+                filterChanges.Add(nameof(ShowSelectedGroupsOnly));
+            }
+
             if (IsInstalled != false)
             {
                 IsInstalled = false;
@@ -1150,6 +1195,7 @@ namespace Playnite
             return new SdkModels.FilterPresetSettings
             {
                 UseAndFilteringStyle = UseAndFilteringStyle,
+                ShowSelectedGroupsOnly = ShowSelectedGroupsOnly,
                 IsInstalled = IsInstalled,
                 IsUnInstalled = IsUnInstalled,
                 Hidden = Hidden,
@@ -1192,6 +1238,7 @@ namespace Playnite
                 Favorite = settings.Favorite,
                 Name = settings.Name,
                 Version = settings.Version,
+                ShowSelectedGroupsOnly = settings.ShowSelectedGroupsOnly,
                 ReleaseYear = StringFilterItemProperties.FromSdkModel(settings.ReleaseYear),
                 Genre = IdItemFilterItemProperties.FromSdkModel(settings.Genre),
                 Platform = IdItemFilterItemProperties.FromSdkModel(settings.Platform),
@@ -1227,6 +1274,12 @@ namespace Playnite
             {
                 UseAndFilteringStyle = settings.UseAndFilteringStyle;
                 filterChanges.Add(nameof(UseAndFilteringStyle));
+            }
+
+            if (ShowSelectedGroupsOnly != settings.ShowSelectedGroupsOnly)
+            {
+                ShowSelectedGroupsOnly = settings.ShowSelectedGroupsOnly;
+                filterChanges.Add(nameof(ShowSelectedGroupsOnly));
             }
 
             if (Name != settings.Name)

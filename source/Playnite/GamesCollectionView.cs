@@ -56,6 +56,14 @@ namespace Playnite
             Items = null;
         }
 
+        /// <summary>
+        /// Hook for subclasses to add projection-time entry visibility rules on top of the
+        /// ordinary game match predicate. The base implementation always returns true so the
+        /// default behavior is unchanged. Returning false hides the projected entry without
+        /// affecting which games match the underlying filter.
+        /// </summary>
+        protected virtual bool IsEntryVisible(GamesCollectionViewEntry entry) => true;
+
         private bool Filter(object item)
         {
             if (!(item is GamesCollectionViewEntry entry))
@@ -63,7 +71,8 @@ namespace Playnite
                 return false;
             }
 
-            return Database.GetGameMatchesFilter(entry.Game, filterSettings, settings.FuzzyMatchingInNameFilter);
+            return Database.GetGameMatchesFilter(entry.Game, filterSettings, settings.FuzzyMatchingInNameFilter) &&
+                IsEntryVisible(entry);
         }
 
         private void FilterSettings_FilterChanged(object sender, FilterChangedEventArgs e)

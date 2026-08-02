@@ -1986,6 +1986,14 @@ namespace Playnite
         /// </summary>
         public const string UseFilterStyleAndTooltip = "LOCUseFilterStyleAndTooltip";
         /// <summary>
+        /// Show selected groups only
+        /// </summary>
+        public const string ShowSelectedGroupsOnlyTitle = "LOCShowSelectedGroupsOnlyTitle";
+        /// <summary>
+        /// Only show groups whose value is one of the exactly selected items for the current grouping field. Ordinary game filtering is unchanged; this only hides projected groups in the grouped view. Available when the current grouping field has an exact item selection (no text search).
+        /// </summary>
+        public const string ShowSelectedGroupsOnlyTooltip = "LOCShowSelectedGroupsOnlyTooltip";
+        /// <summary>
         /// Installed
         /// </summary>
         public const string GameIsInstalledTitle = "LOCGameIsInstalledTitle";

@@ -223,6 +223,16 @@ namespace Playnite.DesktopApp.ViewModels
         }
 
         /// <summary>
+        /// Gets a value indicating whether the "show selected groups only" filter checkbox
+        /// can be enabled. True only when the current grouping field has an exact-ID
+        /// selection (pure ID filter, no text search) that the projection can apply.
+        /// The stored preference is never coerced when this becomes false, so a checked
+        /// dormant preference stays checked and becomes effective again later.
+        /// </summary>
+        public bool CanShowSelectedGroupsOnly =>
+            SelectedGroupFilter.GetExactSelectedIds(AppSettings.FilterSettings, AppSettings.ViewSettings.GroupingOrder) != null;
+
+        /// <summary>
         /// This constructor should be used on from <see cref="DesignMainViewModel"/> for Blend usage!
         /// </summary>
         public DesktopAppViewModel(
@@ -294,6 +304,11 @@ namespace Playnite.DesktopApp.ViewModels
                 }
             }
 
+            if (e.PropertyName == nameof(ViewSettings.GroupingOrder))
+            {
+                OnPropertyChanged(nameof(CanShowSelectedGroupsOnly));
+            }
+
             if (e.PropertyName == nameof(ViewSettings.GamesViewType))
             {
                 // This is done to keep behavior same as in P9 because it could otherwise break some plugins
@@ -346,6 +361,19 @@ namespace Playnite.DesktopApp.ViewModels
 
         private void FilterSettings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(PlayniteSettings.FilterSettings.Category) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Genre) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Developer) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Publisher) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Tag) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Feature) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Platform) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Series) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.AgeRating) ||
+                e.PropertyName == nameof(PlayniteSettings.FilterSettings.Region))
+            {
+                OnPropertyChanged(nameof(CanShowSelectedGroupsOnly));
+            }
         }
 
         public void RemoveGameSelection()

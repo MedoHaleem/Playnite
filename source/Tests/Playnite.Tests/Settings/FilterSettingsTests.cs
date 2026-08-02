@@ -3,10 +3,12 @@ using Playnite;
 using Playnite.Common;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using SdkModels = Playnite.SDK.Models;
+using SdkSerialization = Playnite.SDK.Data.Serialization;
 
 namespace Playnite.Tests.Settings
 {
@@ -172,6 +174,211 @@ namespace Playnite.Tests.Settings
             Assert.AreEqual(IdItemFilterItemProperties.FromSdkModel(new SdkModels.IdItemFilterItemProperties(id)).Ids, new List<Guid> { id });
             Assert.AreEqual(IdItemFilterItemProperties.FromSdkModel(new SdkModels.IdItemFilterItemProperties(new List<Guid> { id })).Ids, new List<Guid> { id });
             Assert.IsNull(IdItemFilterItemProperties.FromSdkModel(new SdkModels.IdItemFilterItemProperties()));
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyDefaultsToFalse()
+        {
+            Assert.IsFalse(new FilterSettings().ShowSelectedGroupsOnly);
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyIsExcludedFromIsActive()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = true };
+            Assert.IsFalse(settings.IsActive, "ShowSelectedGroupsOnly must not activate the filter.");
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyRaisesPropertyAndFilterChange()
+        {
+            var settings = new FilterSettings();
+            var propertyChanges = new List<string>();
+            var filterFields = new List<string>();
+            settings.PropertyChanged += (_, e) => propertyChanges.Add(e.PropertyName);
+            settings.FilterChanged += (_, e) => filterFields.AddRange(e.Fields);
+
+            settings.ShowSelectedGroupsOnly = true;
+
+            CollectionAssert.Contains(propertyChanges, nameof(FilterSettings.ShowSelectedGroupsOnly));
+            CollectionAssert.Contains(filterFields, nameof(FilterSettings.ShowSelectedGroupsOnly));
+            // Setting IsActive is also notified by OnFilterChanged.
+            CollectionAssert.Contains(propertyChanges, nameof(FilterSettings.IsActive));
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyDoesNotRaiseOnSameValue()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = true };
+            var propertyChanges = 0;
+            var filterChanges = 0;
+            settings.PropertyChanged += (_, __) => propertyChanges++;
+            settings.FilterChanged += (_, __) => filterChanges++;
+
+            settings.ShowSelectedGroupsOnly = true;
+            Assert.AreEqual(0, propertyChanges);
+            Assert.AreEqual(0, filterChanges);
+        }
+
+        [Test]
+        public void ClearFiltersResetsShowSelectedGroupsOnlyAndBatchesNotification()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = true };
+            var filterFields = new List<string>();
+            settings.FilterChanged += (_, e) => filterFields.AddRange(e.Fields);
+
+            settings.ClearFilters();
+
+            Assert.IsFalse(settings.ShowSelectedGroupsOnly);
+            // ClearFilters batches a single FilterChanged event whose payload includes the field.
+            Assert.AreEqual(1, filterFields.Count(f => f == nameof(FilterSettings.ShowSelectedGroupsOnly)));
+        }
+
+        [Test]
+        public void ClearFiltersNoNotificationWhenFlagAlreadyFalse()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = false };
+            var filterFields = new List<string>();
+            settings.FilterChanged += (_, e) => filterFields.AddRange(e.Fields);
+
+            settings.ClearFilters();
+            CollectionAssert.DoesNotContain(filterFields, nameof(FilterSettings.ShowSelectedGroupsOnly));
+        }
+
+        [Test]
+        public void ExactIdsNullWhenEmpty()
+        {
+            Assert.IsNull(new IdItemFilterItemProperties().ExactIds);
+            Assert.IsNull(new IdItemFilterItemProperties(new List<Guid>()).ExactIds);
+            Assert.IsNull(new IdItemFilterItemProperties("text").ExactIds);
+        }
+
+        [Test]
+        public void ExactIdsReturnsIdsListByReferenceWhenTextEmpty()
+        {
+            var ids = new List<Guid> { Guid.NewGuid(), Guid.NewGuid() };
+            var field = new IdItemFilterItemProperties(ids);
+            Assert.AreSame(ids, field.ExactIds);
+        }
+
+        [Test]
+        public void ExactIdsPreservesGuidEmpty()
+        {
+            var ids = new List<Guid> { Guid.Empty };
+            var field = new IdItemFilterItemProperties(ids);
+            Assert.AreSame(ids, field.ExactIds);
+            CollectionAssert.Contains(field.ExactIds, Guid.Empty);
+        }
+
+        [Test]
+        public void ExactIdsNullWhenTextPlusId()
+        {
+            var field = new IdItemFilterItemProperties(Guid.NewGuid()) { Text = "search" };
+            Assert.IsNull(field.ExactIds);
+        }
+
+        [Test]
+        public void ExactIdsRaisesNotificationFromIdsAndTextSetters()
+        {
+            var field = new IdItemFilterItemProperties();
+            var changes = new List<string>();
+            ((INotifyPropertyChanged)field).PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+            field.Ids = new List<Guid> { Guid.NewGuid() };
+            Assert.IsTrue(changes.Contains(nameof(IdItemFilterItemProperties.ExactIds)));
+
+            changes.Clear();
+            field.Text = "search";
+            Assert.IsTrue(changes.Contains(nameof(IdItemFilterItemProperties.ExactIds)));
+
+            changes.Clear();
+            field.Text = null;
+            Assert.IsTrue(changes.Contains(nameof(IdItemFilterItemProperties.ExactIds)));
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlySdkConversionRoundTrip()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = true };
+            var sdk = settings.AsPresetSettings();
+            Assert.IsTrue(sdk.ShowSelectedGroupsOnly);
+
+            var restored = FilterSettings.FromSdkFilterSettings(sdk);
+            Assert.IsTrue(restored.ShowSelectedGroupsOnly);
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyApplyFilterDetectsDifference()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = false };
+            var fields = new List<string>();
+            settings.FilterChanged += (_, e) => fields.AddRange(e.Fields);
+
+            settings.ApplyFilter(new SdkModels.FilterPresetSettings { ShowSelectedGroupsOnly = true });
+
+            Assert.IsTrue(settings.ShowSelectedGroupsOnly);
+            CollectionAssert.Contains(fields, nameof(FilterSettings.ShowSelectedGroupsOnly));
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyApplyFilterNoOpOnSameValue()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = true };
+            var fields = new List<string>();
+            settings.FilterChanged += (_, e) => fields.AddRange(e.Fields);
+
+            settings.ApplyFilter(new SdkModels.FilterPresetSettings { ShowSelectedGroupsOnly = true });
+            CollectionAssert.DoesNotContain(fields, nameof(FilterSettings.ShowSelectedGroupsOnly));
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyLiveJsonRoundTrip()
+        {
+            var settings = new FilterSettings { ShowSelectedGroupsOnly = true };
+            var json = Serialization.ToJson(settings);
+            StringAssert.Contains(nameof(FilterSettings.ShowSelectedGroupsOnly), json);
+
+            var restored = Serialization.FromJson<FilterSettings>(json);
+            Assert.IsTrue(restored.ShowSelectedGroupsOnly);
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyOmittedPropertyCompatibility()
+        {
+            // Old config/preset JSON that omits the new boolean must deserialize to the
+            // false default without error (no migration needed).
+            var json = Serialization.ToJson(new FilterSettings()).Replace(nameof(FilterSettings.ShowSelectedGroupsOnly), "__removed__");
+            Assert.IsFalse(json.Contains(nameof(FilterSettings.ShowSelectedGroupsOnly)));
+            var restored = Serialization.FromJson<FilterSettings>(json);
+            Assert.IsFalse(restored.ShowSelectedGroupsOnly);
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlySdkPresetJsonRoundTrip()
+        {
+            var sdk = new SdkModels.FilterPresetSettings { ShowSelectedGroupsOnly = true };
+            var json = SdkSerialization.ToJson(sdk);
+            StringAssert.Contains(nameof(SdkModels.FilterPresetSettings.ShowSelectedGroupsOnly), json);
+
+            var restored = SdkSerialization.FromJson<SdkModels.FilterPresetSettings>(json);
+            Assert.IsTrue(restored.ShowSelectedGroupsOnly);
+        }
+
+        [Test]
+        public void ShowSelectedGroupsOnlyCarriedByNestedFilterPresetCopyDiffTo()
+        {
+            // The new value lives on nested Settings, so replacing the Settings object carries it.
+            var source = new SdkModels.FilterPreset
+            {
+                Settings = new SdkModels.FilterPresetSettings { ShowSelectedGroupsOnly = true }
+            };
+            var target = new SdkModels.FilterPreset
+            {
+                Settings = new SdkModels.FilterPresetSettings { ShowSelectedGroupsOnly = false }
+            };
+
+            source.CopyDiffTo(target);
+            Assert.IsTrue(target.Settings.ShowSelectedGroupsOnly);
         }
     }
 }

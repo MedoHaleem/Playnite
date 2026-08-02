@@ -184,6 +184,16 @@ namespace Playnite.DesktopApp
             }
         }
 
+        protected override bool IsEntryVisible(GamesCollectionViewEntry entry)
+        {
+            if (!settings.FilterSettings.ShowSelectedGroupsOnly)
+            {
+                return true;
+            }
+
+            return SelectedGroupFilter.IsEntryVisible(settings.FilterSettings, viewSettings.GroupingOrder, entry);
+        }
+
         private void SetViewDescriptions()
         {
             var sortDirection = viewSettings.SortingOrderDirection == SortOrderDirection.Ascending ? ListSortDirection.Ascending : ListSortDirection.Descending;

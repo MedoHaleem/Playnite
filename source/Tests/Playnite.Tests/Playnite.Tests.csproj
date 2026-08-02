@@ -158,6 +158,7 @@
     <Compile Include="FileSystemTests.cs" />
     <Compile Include="GamesStatsTests.cs" />
     <Compile Include="ExtensionFactoryTests.cs" />
+    <Compile Include="GamesCollectionViewTests.cs" />
     <Compile Include="DictionaryTests.cs" />
     <Compile Include="Models\CopyDiffToTest.cs" />
     <Compile Include="CueSheetTests.cs" />

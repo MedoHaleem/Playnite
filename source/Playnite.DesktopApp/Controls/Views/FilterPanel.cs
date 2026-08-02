@@ -130,6 +130,12 @@ namespace Playnite.DesktopApp.Controls.Views
             SetToggleFilter(nameof(FilterSettings.Hidden), nameof(DatabaseStats.Hidden), LOC.GameHiddenTitle);
             SetToggleFilter(nameof(FilterSettings.Favorite), nameof(DatabaseStats.Favorite), LOC.GameFavoriteTitle);
             SetToggleFilterWithTooltip(nameof(FilterSettings.UseAndFilteringStyle), LOC.UseFilterStyleAndTitle, LOC.UseFilterStyleAndTooltip);
+            SetToggleFilterWithTooltip(
+                nameof(FilterSettings.ShowSelectedGroupsOnly),
+                LOC.ShowSelectedGroupsOnlyTitle,
+                LOC.ShowSelectedGroupsOnlyTooltip,
+                mainModel,
+                nameof(mainModel.CanShowSelectedGroupsOnly));
 
             SetLabelTag(nameof(FilterSettings.Platform), LOC.PlatformTitle);
             SetFilterSelectionBoxFilter(nameof(DatabaseFilter.Platforms), nameof(FilterSettings.Platform));
@@ -207,7 +213,7 @@ namespace Playnite.DesktopApp.Controls.Views
             SetFilterEnumSelectionBoxFilter(nameof(FilterSettings.Modified), typeof(PastTimeSegment));
         }
 
-        private void SetToggleFilterWithTooltip(string binding, string text, string tooltip)
+        private void SetToggleFilterWithTooltip(string binding, string text, string tooltip, object enabledSource = null, string enabledPath = null)
         {
             var elem = new CheckBox();
             elem.SetResourceReference(CheckBox.StyleProperty, "FilterPanelCheckBox");
@@ -218,6 +224,18 @@ namespace Playnite.DesktopApp.Controls.Views
                 BindingMode.TwoWay);
             elem.Content = ResourceProvider.GetString(text);
             elem.ToolTip = ResourceProvider.GetString(tooltip);
+            if (enabledSource != null && !enabledPath.IsNullOrEmpty())
+            {
+                // Keep the checkbox visible while disabled, but enable its tooltip while disabled
+                // so users can discover why the option is currently inert.
+                ToolTipService.SetShowOnDisabled(elem, true);
+                BindingTools.SetBinding(elem,
+                    UIElement.IsEnabledProperty,
+                    enabledSource,
+                    enabledPath,
+                    BindingMode.OneWay);
+            }
+
             PanelItemsHost.Children.Add(elem);
         }
 
